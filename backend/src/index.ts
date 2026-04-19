@@ -30,15 +30,25 @@ const openai = new OpenAI({
 
 const app = express();
 
+console.log("SERVER STARTED");
+
 // Enable CORS for all origins (allow requests from Vercel frontend)
 app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "512kb" }));
+
+// Test route
+app.get("/test", (_req, res) => {
+  console.log("ROUTE /test HIT");
+  res.send("WORKING");
+});
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
 app.post("/generate", async (req, res) => {
+  console.log("ROUTE /generate HIT");
+
   if (!OPENROUTER_API_KEY) {
     res.status(503).json({
       error:
@@ -78,5 +88,5 @@ app.post("/generate", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`API listening on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
