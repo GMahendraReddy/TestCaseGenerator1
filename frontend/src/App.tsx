@@ -1,13 +1,7 @@
 import { useCallback, useState } from "react";
 import "./App.css";
 
-function getApiBase(): string {
-  const v = import.meta.env.VITE_API_URL;
-  if (v && typeof v === "string" && v.trim()) {
-    return v.replace(/\/$/, "");
-  }
-  return "";
-}
+const API_URL = "https://testcasegenerator1.onrender.com";
 
 export default function App() {
   const [userStory, setUserStory] = useState("");
@@ -17,7 +11,7 @@ export default function App() {
   const generate = useCallback(async () => {
     const trimmed = userStory.trim();
     if (!trimmed) {
-      setError("Enter a user story or feature description.");
+      setError("Enter a user story");
       return;
     }
 
@@ -25,9 +19,7 @@ export default function App() {
     setLoading(true);
 
     try {
-      const base = getApiBase();
-      const url = base ? `${base}/generate` : "/api/generate";
-      const res = await fetch(url, {
+      const res = await fetch(`${API_URL}/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userStory: trimmed }),
@@ -44,7 +36,7 @@ export default function App() {
 
       const blob = await res.blob();
       const cd = res.headers.get("Content-Disposition");
-      let filename = "test-cases.xlsx";
+      let filename = "testcases.xlsx";
       const match = cd?.match(/filename="?([^";]+)"?/i);
       if (match?.[1]) filename = match[1];
 
@@ -58,7 +50,7 @@ export default function App() {
       a.remove();
       URL.revokeObjectURL(objectUrl);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -68,8 +60,7 @@ export default function App() {
     <div className="app">
       <h1>Test case generator</h1>
       <p className="subtitle">
-        Describe a user story; the backend uses OpenRouter to draft test cases
-        and returns an Excel file.
+        Enter a user story to generate test cases in an Excel file.
       </p>
 
       <div className="field">
@@ -95,7 +86,6 @@ export default function App() {
           {loading && <span className="spinner" aria-hidden />}
           {loading ? "Generating…" : "Generate Test Cases"}
         </button>
-        <p className="hint">Requires a running API and valid OPENROUTER_API_KEY.</p>
       </div>
 
       {error && (

@@ -1,89 +1,65 @@
 import cors from "cors";
 import express from "express";
-import OpenAI from "openai";
-import { getOpenRouterApiKey, loadEnv } from "./loadEnv.js";
-import { buildTestCasesWorkbook } from "./services/excelService.js";
-import { generateTestCasesWithOpenAI } from "./services/openaiService.js";
-
-loadEnv();
+import ExcelJS from "exceljs";
 
 const PORT = Number(process.env.PORT) || 5000;
-const OPENROUTER_API_KEY = getOpenRouterApiKey();
-const OPENROUTER_MODEL =
-  process.env.OPENROUTER_MODEL ?? "openai/gpt-4o-mini";
-
-if (!OPENROUTER_API_KEY) {
-  console.warn(
-    [
-      "Warning: OPENROUTER_API_KEY is not set or is still a placeholder.",
-      "Add your key to `.env` in the project root or in `backend/.env`, e.g.:",
-      "  OPENROUTER_API_KEY=sk-or-v1-...",
-      "Get a key at https://openrouter.ai/keys — then restart the API.",
-    ].join("\n")
-  );
-}
-
-const openai = new OpenAI({
-  apiKey: OPENROUTER_API_KEY ?? "missing-key",
-  baseURL: "https://openrouter.ai/api/v1",
-});
 
 const app = express();
 
 console.log("SERVER STARTED");
 
-// Enable CORS for all origins (allow requests from Vercel frontend)
+// Enable CORS for all origins
 app.use(cors({ origin: "*" }));
-app.use(express.json({ limit: "512kb" }));
+app.use(express.json());
 
 // Test route
 app.get("/test", (_req, res) => {
-  console.log("ROUTE /test HIT");
   res.send("WORKING");
 });
 
-app.get("/health", (_req, res) => {
-  res.json({ ok: true });
-});
-
+// Generate test cases endpoint
 app.post("/generate", async (req, res) => {
-  console.log("ROUTE /generate HIT");
+  const { userStory } = req.body;
 
-  if (!OPENROUTER_API_KEY) {
-    res.status(503).json({
-      error:
-        "Server is not configured with OPENROUTER_API_KEY. Add OPENROUTER_API_KEY=sk-or-v1-... to the project root `.env` (or `backend/.env`), save, and restart the dev server.",
-    });
-    return;
-  }
-
-  const userStory = req.body?.userStory;
-  if (typeof userStory !== "string" || !userStory.trim()) {
-    res.status(400).json({
-      error: 'Request body must include a non-empty string "userStory"',
-    });
+  if (!userStory || typeof userStory !== "string" || !userStory.trim()) {
+    res.status(400).json({ error: "userStory is required" });
     return;
   }
 
   try {
-    const testCases = await generateTestCasesWithOpenAI(
-      openai,
-      OPENROUTER_MODEL,
-      userStory.trim()
-    );
-    const buffer = await buildTestCasesWorkbook(testCases);
+    // Create Excel workbook
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Test Cases");
 
-    const filename = `test-cases-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    // Add headers
+    worksheet.columns = [
+      { header: "TC.NO", key: "tcNo", width: 10 },
+      { header: "Description", key: "description", width: 40 },
+      { header: "Steps", key: "steps", width: 50 },
+      { header: "Expected Result", key: "expectedResult", width: 40 },
+    ];
+
+    // Add sample test case based on user story
+    worksheet.addRow({
+      tcNo: 1,
+      description: `Verify user can ${userStory.trim()}`,
+      steps: `1. Navigate to the application\n2. Perform the action: ${userStory.trim()}\n3. Verify the result`,
+      expectedResult: "User should be able to successfully complete the action",
+    });
+
+    // Set response headers
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Disposition", "attachment; filename=testcases.xlsx");
+
+    // Send Excel file
+    const buffer = await workbook.xlsx.writeBuffer();
     res.send(buffer);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[POST /generate]", err);
-    res.status(500).json({ error: message });
+    res.status(500).json({ error: "Failed to generate Excel file" });
   }
 });
 
